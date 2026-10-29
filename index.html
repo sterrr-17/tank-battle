@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>坦克大战 Tank Battle</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -12,10 +12,16 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 100vh;
+    min-height: 100vh;          /* 旧浏览器回退 */
+    min-height: 100dvh;         /* iOS Safari 地址栏收起时自适应（15.4+），100vh 会被工具栏撑出屏幕 */
     font-family: "Microsoft YaHei", Arial, sans-serif;
     color: #eee;
     user-select: none;
+    -webkit-user-select: none;  /* iOS Safari 必须加 -webkit- 前缀才生效 */
+    -webkit-touch-callout: none; /* 禁止 iOS 长按弹出放大镜/选单 */
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+    touch-action: manipulation; /* 禁用 iOS 双击缩放，同时保留单击响应 */
   }
   h1 {
     margin-bottom: 10px;
@@ -49,6 +55,13 @@
   #panel .val { font-size: 22px; font-weight: bold; color: #fff; }
   #help { font-size: 12px; line-height: 1.9; color: #aaa; }
   #help b { color: #ddd; }
+  #touchToggle {
+    margin-top: 8px; padding: 6px 8px; width: 100%;
+    background: #3a3a55; color: #ddd;
+    border: 1px solid #555; border-radius: 6px;
+    cursor: pointer; font-size: 12px;
+  }
+  #touchToggle:hover { background: #4a4a6a; }
   #overlay {
     position: fixed;
     inset: 0;
@@ -59,6 +72,8 @@
     justify-content: center;
     gap: 18px;
     z-index: 10;
+    touch-action: manipulation;
+    -webkit-overflow-scrolling: touch;
   }
   #overlay h2 { font-size: 40px; color: #f0c040; letter-spacing: 6px; }
   #overlay p  { color: #ccc; line-height: 1.8; text-align: center; }
@@ -79,7 +94,8 @@
   @media (max-width: 760px) {
     body { padding: 8px 0; }
     h1 { font-size: 22px; margin-bottom: 8px; }
-    #game { width: min(92vw, 62vh); }
+    /* 用 svh（最小可视高度）而不是 vh，保证地址栏展开时画布也不会超出屏幕被切掉 */
+    #game { width: min(92vw, 62vh); width: min(92vw, 62svh); }
     #wrap { flex-direction: column; gap: 10px; }
     #panel {
       width: min(92vw, 520px);
@@ -103,7 +119,9 @@
     pointer-events: auto; touch-action: none;
   }
   #joyBase {
-    position: absolute; left: 24px; bottom: 24px;
+    position: absolute;
+    left: calc(24px + env(safe-area-inset-left, 0px));
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
     width: 118px; height: 118px; border-radius: 50%;
     background: rgba(60, 60, 90, .35);
     border: 2px solid rgba(140, 140, 200, .5);
@@ -116,7 +134,9 @@
     transform: translate(-50%, -50%);
   }
   #fireBtn {
-    position: absolute; right: 24px; bottom: 36px;
+    position: absolute;
+    right: calc(24px + env(safe-area-inset-right, 0px));
+    bottom: calc(36px + env(safe-area-inset-bottom, 0px));
     width: 92px; height: 92px; border-radius: 50%;
     background: rgba(200, 70, 50, .8);
     border: 2px solid rgba(255, 160, 140, .6);
@@ -126,7 +146,9 @@
   }
   #fireBtn:active { background: rgba(255, 100, 70, .95); }
   #pauseBtn {
-    position: absolute; right: 32px; bottom: 148px;
+    position: absolute;
+    right: calc(32px + env(safe-area-inset-right, 0px));
+    bottom: calc(148px + env(safe-area-inset-bottom, 0px));
     width: 46px; height: 46px; border-radius: 12px;
     background: rgba(60, 60, 90, .7);
     border: 2px solid #666; color: #eee; font-size: 18px;
@@ -151,7 +173,8 @@
       ← / A &nbsp;向左<br>
       → / D &nbsp;向右<br>
       空格 &nbsp;射击<br>
-      P &nbsp;&nbsp;&nbsp;暂停
+      P &nbsp;&nbsp;&nbsp;暂停<br>
+      <button id="touchToggle" class="hidden">📱 显示触屏按钮</button>
     </div>
   </div>
 </div>
@@ -696,6 +719,9 @@ if (isTouch) {
   touchEl.classList.remove("hidden");
   touchEl.addEventListener("contextmenu", e => e.preventDefault());
   document.addEventListener("touchmove", e => e.preventDefault(), { passive: false });
+  // iOS 专用：拦截双指捏合缩放与双击缩放（user-scalable=no 在 iOS 上已被忽略）
+  document.addEventListener("gesturestart", e => e.preventDefault());
+  document.addEventListener("dblclick", e => e.preventDefault());
 
   /* —— 左侧虚拟滑杆：在左半屏按住拖动即可转向，松手即停 —— */
   const joyZone = document.getElementById("joyZone");
